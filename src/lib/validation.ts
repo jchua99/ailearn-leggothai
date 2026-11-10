@@ -120,3 +120,16 @@ export function parseExpense(
     value: { amountCents, description, category, spentDate, spentTime, paidBy, splitType, splitUserIds, itemId },
   };
 }
+
+export type SettlementInput = { fromUserId: number; toUserId: number; amountCents: number };
+
+/** Settlement args arrive as bound Server Action arguments, which the client can tamper with. */
+export function parseSettlement(raw: SettlementInput, validUserIds: number[]): Parsed<SettlementInput> {
+  const { fromUserId, toUserId, amountCents } = raw;
+  if (!validUserIds.includes(fromUserId) || !validUserIds.includes(toUserId)) {
+    return { ok: false, error: "Unknown person." };
+  }
+  if (fromUserId === toUserId) return { ok: false, error: "Can't repay yourself." };
+  if (!Number.isSafeInteger(amountCents) || amountCents <= 0) return { ok: false, error: "Invalid amount." };
+  return { ok: true, value: { fromUserId, toUserId, amountCents } };
+}

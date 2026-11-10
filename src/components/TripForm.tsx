@@ -1,7 +1,7 @@
 "use client";
 
-import { useActionState } from "react";
 import { saveTripAction } from "@/app/actions";
+import { useFormAction } from "./useFormAction";
 import type { Trip } from "@/db/schema";
 import { Field, FormMessage, inputClass, primaryButton } from "./ui";
 
@@ -16,9 +16,9 @@ export function TripForm({
   fromSetup?: boolean;
   timeZones: string[];
 }) {
-  const [state, action, pending] = useActionState(saveTripAction, undefined);
+  const { state, onSubmit, pending } = useFormAction(saveTripAction);
   return (
-    <form action={action} className="space-y-4">
+    <form onSubmit={onSubmit} className="space-y-4">
       {fromSetup && <input type="hidden" name="fromSetup" value="1" />}
       <Field label="Trip name">
         <input name="name" required maxLength={60} defaultValue={trip?.name ?? ""} placeholder="Thailand 2026" className={inputClass} />

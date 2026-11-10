@@ -28,31 +28,62 @@ export async function getUser(db: Db, id: number) {
   return u ?? null;
 }
 
+export async function listUserIds(db: Db): Promise<number[]> {
+  const rows = await db.select({ id: users.id }).from(users).orderBy(asc(users.id));
+  return rows.map((r) => r.id);
+}
+
+/** True for SQLite UNIQUE violations, however deeply the driver/ORM wrapped them. */
+function isUniqueViolation(err: unknown): boolean {
+  for (let e: unknown = err; e; e = (e as { cause?: unknown }).cause) {
+    const { code, message } = e as { code?: unknown; message?: unknown };
+    if (typeof code === "string" && code.startsWith("SQLITE_CONSTRAINT")) return true;
+    if (typeof message === "string" && message.includes("UNIQUE constraint failed")) return true;
+  }
+  return false;
+}
+
 export type CreateUserResult = { ok: true; id: number } | { ok: false; error: string };
 
 export async function createUser(db: Db, username: string): Promise<CreateUserResult> {
+  const full = { ok: false, error: `This trip already has the maximum of ${MAX_USERS} people.` } as const;
+  const taken = { ok: false, error: `"${username}" is already taken — pick it from the login list instead.` } as const;
+
   const existing = await listUsers(db);
-  if (existing.length >= MAX_USERS) {
-    return { ok: false, error: `This trip already has the maximum of ${MAX_USERS} people.` };
-  }
+  if (existing.length >= MAX_USERS) return full;
   const key = username.toLowerCase();
-  if (existing.some((u) => u.usernameKey === key)) {
-    return { ok: false, error: `"${username}" is already taken — pick it from the login list instead.` };
-  }
+  if (existing.some((u) => u.usernameKey === key)) return taken;
   const used = new Set(existing.map((u) => u.color));
   const color = USER_COLORS.find((c) => !used.has(c)) ?? USER_COLORS[existing.length % USER_COLORS.length];
-  const [row] = await db
-    .insert(users)
-    .values({ username, usernameKey: key, color })
-    .returning({ id: users.id });
-  return { ok: true, id: row.id };
+
+  try {
+    // The checks above give friendly errors; this single statement is what actually enforces the cap,
+    // atomically, so concurrent sign-ups can't both slip in as the 10th person.
+    const rows = await db.all<{ id: number }>(sql`
+      INSERT INTO ${users} (username, username_key, color)
+      SELECT ${username}, ${key}, ${color}
+      WHERE (SELECT COUNT(*) FROM ${users}) < ${MAX_USERS}
+      RETURNING id`);
+    return rows[0] ? { ok: true, id: rows[0].id } : full;
+  } catch (err) {
+    // Same name signed up concurrently: the UNIQUE index on username_key caught it.
+    if (isUniqueViolation(err)) return taken;
+    throw err;
+  }
 }
 
 export async function renameUser(db: Db, id: number, username: string): Promise<{ ok: boolean; error?: string }> {
+  const taken = { ok: false, error: `"${username}" is already taken.` };
   const key = username.toLowerCase();
-  const [clash] = await db.select().from(users).where(eq(users.usernameKey, key));
-  if (clash && clash.id !== id) return { ok: false, error: `"${username}" is already taken.` };
-  await db.update(users).set({ username, usernameKey: key }).where(eq(users.id, id));
+  const [clash] = await db.select({ id: users.id }).from(users).where(eq(users.usernameKey, key));
+  if (clash && clash.id !== id) return taken;
+  try {
+    await db.update(users).set({ username, usernameKey: key }).where(eq(users.id, id));
+  } catch (err) {
+    // Someone else grabbed the name between the check and the update.
+    if (isUniqueViolation(err)) return taken;
+    throw err;
+  }
   return { ok: true };
 }
 
@@ -98,6 +129,16 @@ export async function listItineraryWithAttendees(db: Db) {
 }
 
 export type ItineraryItemWithAttendees = Awaited<ReturnType<typeof listItineraryWithAttendees>>[number];
+
+export async function listItineraryItemIds(db: Db): Promise<number[]> {
+  const rows = await db.select({ id: itineraryItems.id }).from(itineraryItems);
+  return rows.map((r) => r.id);
+}
+
+export async function itineraryItemExists(db: Db, id: number): Promise<boolean> {
+  const [row] = await db.select({ id: itineraryItems.id }).from(itineraryItems).where(eq(itineraryItems.id, id));
+  return !!row;
+}
 
 export async function getItineraryItem(db: Db, id: number) {
   const [item] = await db.select().from(itineraryItems).where(eq(itineraryItems.id, id));
@@ -180,7 +221,10 @@ export async function listExpensesWithShares(db: Db) {
   }));
 }
 
-export type ExpenseWithShares = Awaited<ReturnType<typeof listExpensesWithShares>>[number];
+export async function expenseExists(db: Db, id: number): Promise<boolean> {
+  const [row] = await db.select({ id: expenses.id }).from(expenses).where(eq(expenses.id, id));
+  return !!row;
+}
 
 export async function getExpense(db: Db, id: number) {
   const [e] = await db.select().from(expenses).where(eq(expenses.id, id));

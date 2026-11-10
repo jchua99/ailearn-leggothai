@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { ReactNode } from "react";
 import type { User } from "@/db/schema";
 
@@ -73,4 +74,33 @@ export function PageHeader({ title, subtitle, action }: { title: string; subtitl
 
 export function Card({ children, className = "" }: { children: ReactNode; className?: string }) {
   return <div className={`rounded-xl border border-slate-200 bg-white p-4 shadow-sm ${className}`}>{children}</div>;
+}
+
+/** Highlight for a visually-hidden radio/checkbox's label when it has keyboard focus. */
+export const optionFocusRing = "has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-teal-600/40";
+
+/** Pill-style All / Mine switch driven by links (so it works with the URL and back button). */
+export function SegmentedTabs<V extends string>({
+  value,
+  tabs,
+}: {
+  value: V;
+  tabs: { value: V; label: string; href: string }[];
+}) {
+  return (
+    <div className="flex rounded-lg bg-slate-200/70 p-1">
+      {tabs.map((t) => (
+        <Link
+          key={t.value}
+          href={t.href}
+          aria-current={value === t.value ? "page" : undefined}
+          className={`flex-1 rounded-md px-3 py-1.5 text-center text-sm font-medium ${
+            value === t.value ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"
+          }`}
+        >
+          {t.label}
+        </Link>
+      ))}
+    </div>
+  );
 }

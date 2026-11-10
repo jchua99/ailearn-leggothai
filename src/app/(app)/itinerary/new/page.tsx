@@ -1,6 +1,7 @@
 import { db } from "@/db";
 import { listUsers } from "@/lib/repo";
 import { requireUserAndTrip } from "@/lib/session";
+import { toMiniUser } from "@/lib/users";
 import { nowInTimeZone } from "@/lib/time";
 import { PageHeader } from "@/components/ui";
 import { ItemForm } from "../ItemForm";
@@ -17,7 +18,7 @@ export default async function NewItemPage() {
       <PageHeader title="Add to itinerary" />
       <main className="mx-auto max-w-2xl px-4 py-4">
         <ItemForm
-          users={users.map((u) => ({ id: u.id, username: u.username, color: u.color }))}
+          users={users.map(toMiniUser)}
           currentUserId={user.id}
           initial={{
             date,

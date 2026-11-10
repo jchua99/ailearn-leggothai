@@ -1,4 +1,4 @@
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
 import { getTrip, getUser } from "./repo";
@@ -8,7 +8,18 @@ import { getTrip, getUser } from "./repo";
  * The cookie just holds the user id; anyone could pick anyone, by design.
  */
 const COOKIE = "leggothai_uid";
-const ONE_YEAR = 60 * 60 * 24 * 365;
+/** Long enough to cover planning + the trip itself; after that, just pick your name again. */
+const SESSION_MAX_AGE = 60 * 60 * 24 * 30;
+
+/**
+ * Only mark the cookie Secure when the request actually came in over HTTPS (e.g. hosted on Vercel).
+ * The README's "phones on the same Wi-Fi" setup is plain http://, where a Secure cookie would never be sent.
+ */
+async function isHttps() {
+  const h = await headers();
+  const proto = h.get("x-forwarded-proto")?.split(",")[0]?.trim();
+  return proto === "https";
+}
 
 export async function getCurrentUser() {
   const raw = (await cookies()).get(COOKIE)?.value;
@@ -35,8 +46,9 @@ export async function startSession(userId: number) {
   (await cookies()).set(COOKIE, String(userId), {
     httpOnly: true,
     sameSite: "lax",
+    secure: await isHttps(),
     path: "/",
-    maxAge: ONE_YEAR,
+    maxAge: SESSION_MAX_AGE,
   });
 }
 
