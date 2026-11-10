@@ -3,9 +3,10 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
+import { computeBalances, maxRepayment } from "@/lib/money";
 import * as repo from "@/lib/repo";
 import { endSession, requireUser, startSession } from "@/lib/session";
-import { parseExpense, parseItineraryItem, parseTrip, parseUsername } from "@/lib/validation";
+import { parseExpense, parseItineraryItem, parseSettlement, parseTrip, parseUsername } from "@/lib/validation";
 
 export type FormState = { error?: string; success?: string } | undefined;
 
@@ -55,25 +56,42 @@ export async function saveTripAction(_prev: FormState, fd: FormData): Promise<Fo
   return { success: "Trip settings saved." };
 }
 
-// ---------- itinerary ----------
+// ---------- itinerary & expenses ----------
+
+/**
+ * Shared create-or-update flow for forms with an optional hidden `id`:
+ * no id → create; id → update, unless someone else deleted the row meanwhile.
+ */
+async function saveWithId(
+  fd: FormData,
+  ops: {
+    exists: (id: number) => Promise<boolean>;
+    update: (id: number) => Promise<void>;
+    create: () => Promise<number>;
+    goneMessage: string;
+  },
+): Promise<{ ok: true; id: number } | { ok: false; error: string }> {
+  const id = Number(fd.get("id"));
+  if (!id) return { ok: true, id: await ops.create() };
+  if (!(await ops.exists(id))) return { ok: false, error: ops.goneMessage };
+  await ops.update(id);
+  return { ok: true, id };
+}
 
 export async function saveItemAction(_prev: FormState, fd: FormData): Promise<FormState> {
   const user = await requireUser();
-  const userIds = (await repo.listUsers(db)).map((u) => u.id);
-  const parsed = parseItineraryItem(fd, userIds);
+  const parsed = parseItineraryItem(fd, await repo.listUserIds(db));
   if (!parsed.ok) return { error: parsed.error };
 
-  const id = Number(fd.get("id"));
-  let itemId: number;
-  if (id) {
-    if (!(await repo.getItineraryItem(db, id))) return { error: "This item was deleted by someone else." };
-    await repo.updateItineraryItem(db, id, parsed.value);
-    itemId = id;
-  } else {
-    itemId = await repo.createItineraryItem(db, parsed.value, user.id);
-  }
+  const saved = await saveWithId(fd, {
+    exists: (id) => repo.itineraryItemExists(db, id),
+    update: (id) => repo.updateItineraryItem(db, id, parsed.value),
+    create: () => repo.createItineraryItem(db, parsed.value, user.id),
+    goneMessage: "This item was deleted by someone else.",
+  });
+  if (!saved.ok) return { error: saved.error };
   revalidatePath("/");
-  redirect(`/#item-${itemId}`);
+  redirect(`/#item-${saved.id}`);
 }
 
 export async function deleteItemAction(id: number) {
@@ -83,22 +101,19 @@ export async function deleteItemAction(id: number) {
   redirect("/");
 }
 
-// ---------- expenses ----------
-
 export async function saveExpenseAction(_prev: FormState, fd: FormData): Promise<FormState> {
   const user = await requireUser();
-  const userIds = (await repo.listUsers(db)).map((u) => u.id);
-  const itemIds = (await repo.listItineraryWithAttendees(db)).map((i) => i.id);
+  const [userIds, itemIds] = await Promise.all([repo.listUserIds(db), repo.listItineraryItemIds(db)]);
   const parsed = parseExpense(fd, userIds, itemIds);
   if (!parsed.ok) return { error: parsed.error };
 
-  const id = Number(fd.get("id"));
-  if (id) {
-    if (!(await repo.getExpense(db, id))) return { error: "This expense was deleted by someone else." };
-    await repo.updateExpense(db, id, parsed.value);
-  } else {
-    await repo.createExpense(db, parsed.value, user.id);
-  }
+  const saved = await saveWithId(fd, {
+    exists: (id) => repo.expenseExists(db, id),
+    update: (id) => repo.updateExpense(db, id, parsed.value),
+    create: () => repo.createExpense(db, parsed.value, user.id),
+    goneMessage: "This expense was deleted by someone else.",
+  });
+  if (!saved.ok) return { error: saved.error };
   revalidatePath("/", "layout");
   redirect("/expenses");
 }
@@ -112,10 +127,24 @@ export async function deleteExpenseAction(id: number) {
 
 // ---------- settlements ----------
 
+/**
+ * The amount comes from the "Mark settled" button rendered earlier, so it may be stale (second tab,
+ * double tap, another phone). Re-check against live balances and never record more than is still owed —
+ * otherwise a repeat submit would flip the debt the other way.
+ */
 export async function recordSettlementAction(fromUserId: number, toUserId: number, amountCents: number) {
   const user = await requireUser();
-  if (!(amountCents > 0) || fromUserId === toUserId) return;
-  await repo.createSettlement(db, { fromUserId, toUserId, amountCents }, user.id);
+  const [userIds, expenses, settlements] = await Promise.all([
+    repo.listUserIds(db),
+    repo.listExpensesWithShares(db),
+    repo.listSettlements(db),
+  ]);
+  const parsed = parseSettlement({ fromUserId, toUserId, amountCents }, userIds);
+  if (parsed.ok) {
+    const owed = maxRepayment(computeBalances(userIds, expenses, settlements), fromUserId, toUserId);
+    const amount = Math.min(parsed.value.amountCents, owed);
+    if (amount > 0) await repo.createSettlement(db, { fromUserId, toUserId, amountCents: amount }, user.id);
+  }
   revalidatePath("/balances");
 }
 

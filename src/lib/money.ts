@@ -18,8 +18,10 @@ export type Transfer = SettlementForBalance;
 
 /** "1,200.50" -> 120050. Returns null for anything that isn't a positive amount with ≤ 2 decimals. */
 export function parseAmountToCents(input: string): number | null {
-  const cleaned = input.trim().replace(/,/g, "");
-  const match = /^(\d+)(?:\.(\d{1,2}))?$/.exec(cleaned);
+  const trimmed = input.trim();
+  // Commas are only allowed as proper thousands separators: "1,200" yes, "1,2,3" or "1,,000" no.
+  if (!/^(\d{1,3}(,\d{3})+|\d+)(\.\d{1,2})?$/.test(trimmed)) return null;
+  const match = /^(\d+)(?:\.(\d{1,2}))?$/.exec(trimmed.replace(/,/g, ""));
   if (!match) return null;
   const cents = Number(match[1]) * 100 + Number((match[2] ?? "").padEnd(2, "0"));
   if (!Number.isSafeInteger(cents) || cents <= 0) return null;
@@ -42,6 +44,11 @@ export function formatMoney(cents: number, currency: string): string {
   } catch {
     return `${currency} ${(cents / 100).toFixed(2)}`;
   }
+}
+
+/** Formatter bound to the trip currency, e.g. `const money = moneyFormatter(trip.currency)`. */
+export function moneyFormatter(currency: string): (cents: number) => string {
+  return (cents) => formatMoney(cents, currency);
 }
 
 /**
@@ -77,6 +84,16 @@ export function computeBalances(
     add(s.toUserId, -s.amountCents);
   }
   return balances;
+}
+
+/**
+ * The most `fromUserId` can repay `toUserId` right now without flipping either balance:
+ * the smaller of what the debtor owes and what the creditor is owed. 0 if no repayment makes sense.
+ */
+export function maxRepayment(balances: Record<number, number>, fromUserId: number, toUserId: number): number {
+  const owes = -(balances[fromUserId] ?? 0);
+  const owed = balances[toUserId] ?? 0;
+  return Math.max(0, Math.min(owes, owed));
 }
 
 /** Greedy largest-debtor → largest-creditor matching. At most n-1 transfers. */

@@ -1,11 +1,11 @@
 import Link from "next/link";
 import { db } from "@/db";
 import { CATEGORY_ICONS } from "@/lib/constants";
-import { formatMoney, spendingSummary } from "@/lib/money";
+import { moneyFormatter, spendingSummary } from "@/lib/money";
 import { listExpensesWithShares, listItineraryWithAttendees, listUsers } from "@/lib/repo";
 import { requireUserAndTrip } from "@/lib/session";
 import { formatDayLabel } from "@/lib/time";
-import { Card, PageHeader, primaryButton } from "@/components/ui";
+import { Card, PageHeader, primaryButton, SegmentedTabs } from "@/components/ui";
 
 export default async function ExpensesPage({ searchParams }: PageProps<"/expenses">) {
   const { user, trip } = await requireUserAndTrip();
@@ -17,7 +17,7 @@ export default async function ExpensesPage({ searchParams }: PageProps<"/expense
   ]);
   const userById = new Map(users.map((u) => [u.id, u]));
   const itemById = new Map(items.map((i) => [i.id, i]));
-  const money = (c: number) => formatMoney(c, trip.currency);
+  const money = moneyFormatter(trip.currency);
 
   const summary = spendingSummary(users.map((u) => u.id), allExpenses);
   const mine = summary.byUser[user.id] ?? { paidCents: 0, costCents: 0 };
@@ -27,18 +27,6 @@ export default async function ExpensesPage({ searchParams }: PageProps<"/expense
       ? allExpenses.filter((e) => e.paidBy === user.id || e.shares.some((s) => s.userId === user.id))
       : allExpenses;
   const dates = [...new Set(expenses.map((e) => e.spentDate))];
-
-  const tab = (v: "all" | "mine", label: string) => (
-    <Link
-      href={v === "all" ? "/expenses" : "/expenses?view=mine"}
-      aria-current={view === v ? "page" : undefined}
-      className={`flex-1 rounded-md px-3 py-1.5 text-center text-sm font-medium ${
-        view === v ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"
-      }`}
-    >
-      {label}
-    </Link>
-  );
 
   return (
     <>
@@ -64,10 +52,13 @@ export default async function ExpensesPage({ searchParams }: PageProps<"/expense
           </Card>
         </div>
 
-        <div className="flex rounded-lg bg-slate-200/70 p-1">
-          {tab("all", "All")}
-          {tab("mine", "Involving me")}
-        </div>
+        <SegmentedTabs
+          value={view}
+          tabs={[
+            { value: "all", label: "All", href: "/expenses" },
+            { value: "mine", label: "Involving me", href: "/expenses?view=mine" },
+          ]}
+        />
 
         {expenses.length === 0 && (
           <p className="py-10 text-center text-sm text-slate-500">No expenses yet. Tap “+ Add” to log one.</p>

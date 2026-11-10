@@ -1,13 +1,13 @@
 "use client";
 
-import { useActionState } from "react";
 import { loginAction } from "@/app/actions";
+import { useFormAction } from "@/components/useFormAction";
 import { Field, FormMessage, inputClass, primaryButton } from "@/components/ui";
 
 export function LoginForm({ users }: { users: { id: number; username: string }[] }) {
-  const [state, action, pending] = useActionState(loginAction, undefined);
+  const { state, onSubmit, pending } = useFormAction(loginAction);
   return (
-    <form action={action} className="space-y-4">
+    <form onSubmit={onSubmit} className="space-y-4">
       <Field label="Your name">
         <select name="userId" required defaultValue="" className={inputClass}>
           <option value="" disabled>

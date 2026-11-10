@@ -1,12 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useState } from "react";
+import { useState } from "react";
 import { deleteItemAction, saveItemAction } from "@/app/actions";
 import { CATEGORY_ICONS, ITINERARY_CATEGORIES } from "@/lib/constants";
-import { dangerButton, Field, FormMessage, inputClass, primaryButton, secondaryButton } from "@/components/ui";
-
-type MiniUser = { id: number; username: string; color: string };
+import { dangerButton, Field, FormMessage, inputClass, optionFocusRing, primaryButton, secondaryButton } from "@/components/ui";
+import { useFormAction } from "@/components/useFormAction";
+import type { MiniUser } from "@/lib/users";
 
 export type ItemFormValues = {
   id?: number;
@@ -31,13 +31,13 @@ export function ItemForm({
   users: MiniUser[];
   currentUserId: number;
 }) {
-  const [state, action, pending] = useActionState(saveItemAction, undefined);
+  const { state, onSubmit, pending } = useFormAction(saveItemAction);
   const [audience, setAudience] = useState<"everyone" | "some">(initial.forEveryone ? "everyone" : "some");
   const defaultAttendees = initial.attendeeIds.length ? initial.attendeeIds : [currentUserId];
 
   return (
     <div className="space-y-6">
-      <form action={action} className="space-y-4">
+      <form onSubmit={onSubmit} className="space-y-4">
         {initial.id && <input type="hidden" name="id" value={initial.id} />}
         <Field label="What">
           <input name="title" required maxLength={100} defaultValue={initial.title} placeholder="Dinner at Jay Fai" className={inputClass} />
@@ -81,7 +81,7 @@ export function ItemForm({
             {(["everyone", "some"] as const).map((v) => (
               <label
                 key={v}
-                className={`flex-1 cursor-pointer rounded-lg border px-3 py-2 text-center text-sm font-medium ${
+                className={`flex-1 cursor-pointer rounded-lg border px-3 py-2 text-center text-sm font-medium ${optionFocusRing} ${
                   audience === v ? "border-teal-600 bg-teal-50 text-teal-800" : "border-slate-300 bg-white text-slate-600"
                 }`}
               >

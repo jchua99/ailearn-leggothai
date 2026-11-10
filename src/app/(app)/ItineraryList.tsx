@@ -6,23 +6,10 @@ import { CATEGORY_ICONS } from "@/lib/constants";
 import { scheduleStatus } from "@/lib/schedule";
 import { formatDayLabel, nowInTimeZone, toMinutes } from "@/lib/time";
 import { UserChip } from "@/components/ui";
+import type { ItineraryItemWithAttendees } from "@/lib/repo";
+import type { MiniUser } from "@/lib/users";
 
-type Item = {
-  id: number;
-  date: string;
-  startTime: string | null;
-  endTime: string | null;
-  title: string;
-  category: string;
-  location: string | null;
-  mapUrl: string | null;
-  notes: string | null;
-  forEveryone: boolean;
-  attendeeIds: number[];
-  createdBy: number;
-};
-
-type MiniUser = { id: number; username: string; color: string };
+type Item = ItineraryItemWithAttendees;
 type Now = { date: string; time: string; minutes: number };
 
 const REFRESH_MS = 30_000;

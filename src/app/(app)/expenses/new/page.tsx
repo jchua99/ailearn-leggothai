@@ -1,6 +1,7 @@
 import { db } from "@/db";
 import { listItineraryWithAttendees, listUsers } from "@/lib/repo";
 import { requireUserAndTrip } from "@/lib/session";
+import { toMiniUser } from "@/lib/users";
 import { nowInTimeZone } from "@/lib/time";
 import { PageHeader } from "@/components/ui";
 import { ExpenseForm } from "../ExpenseForm";
@@ -16,7 +17,7 @@ export default async function NewExpensePage() {
       <main className="mx-auto max-w-2xl px-4 py-4">
         <ExpenseForm
           currency={trip.currency}
-          users={users.map((u) => ({ id: u.id, username: u.username, color: u.color }))}
+          users={users.map(toMiniUser)}
           items={items.map((i) => ({ id: i.id, title: i.title, date: i.date, startTime: i.startTime, category: i.category }))}
           initial={{
             amount: "",

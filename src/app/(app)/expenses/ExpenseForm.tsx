@@ -1,15 +1,20 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useState } from "react";
+import { useState } from "react";
 import { deleteExpenseAction, saveExpenseAction } from "@/app/actions";
 import { CATEGORY_ICONS, EXPENSE_CATEGORIES, expenseCategoryFor } from "@/lib/constants";
 import { formatMoney, parseAmountToCents, splitEqually } from "@/lib/money";
 import { formatDayLabel } from "@/lib/time";
-import { dangerButton, Field, FormMessage, inputClass, primaryButton, secondaryButton } from "@/components/ui";
+import { dangerButton, Field, FormMessage, inputClass, optionFocusRing, primaryButton, secondaryButton } from "@/components/ui";
+import { useFormAction } from "@/components/useFormAction";
+import type { MiniUser } from "@/lib/users";
 
-type MiniUser = { id: number; username: string; color: string };
 type MiniItem = { id: number; title: string; date: string; startTime: string | null; category: string };
+
+/** ≥44px tall so it's easy to hit on a phone. */
+const quickPickButton =
+  "min-h-11 rounded-lg px-3 hover:bg-teal-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600/40";
 
 export type ExpenseFormValues = {
   id?: number;
@@ -35,7 +40,7 @@ export function ExpenseForm({
   items: MiniItem[];
   currency: string;
 }) {
-  const [state, action, pending] = useActionState(saveExpenseAction, undefined);
+  const { state, onSubmit, pending } = useFormAction(saveExpenseAction);
   const [amount, setAmount] = useState(initial.amount);
   const [description, setDescription] = useState(initial.description);
   const [category, setCategory] = useState(initial.category);
@@ -68,7 +73,7 @@ export function ExpenseForm({
 
   return (
     <div className="space-y-6">
-      <form action={action} className="space-y-4">
+      <form onSubmit={onSubmit} className="space-y-4">
         {initial.id && <input type="hidden" name="id" value={initial.id} />}
 
         <Field label={`Amount (${currency})`}>
@@ -142,7 +147,7 @@ export function ExpenseForm({
             {(["personal", "equal"] as const).map((v) => (
               <label
                 key={v}
-                className={`flex-1 cursor-pointer rounded-lg border px-3 py-2 text-center text-sm font-medium ${
+                className={`flex-1 cursor-pointer rounded-lg border px-3 py-2 text-center text-sm font-medium ${optionFocusRing} ${
                   splitType === v ? "border-teal-600 bg-teal-50 text-teal-800" : "border-slate-300 bg-white text-slate-600"
                 }`}
               >
@@ -156,9 +161,13 @@ export function ExpenseForm({
             <p className="text-xs text-slate-500">Not shared — counts only toward the payer’s spending.</p>
           ) : (
             <>
-              <div className="flex justify-end gap-3 text-xs font-medium text-teal-700">
-                <button type="button" onClick={() => setSplitUserIds(users.map((u) => u.id))}>All</button>
-                <button type="button" onClick={() => setSplitUserIds([])}>None</button>
+              <div className="flex justify-end gap-1 text-sm font-medium text-teal-700">
+                <button type="button" onClick={() => setSplitUserIds(users.map((u) => u.id))} className={quickPickButton}>
+                  All
+                </button>
+                <button type="button" onClick={() => setSplitUserIds([])} className={quickPickButton}>
+                  None
+                </button>
               </div>
               <div className="grid grid-cols-2 gap-2">
                 {users.map((u) => {

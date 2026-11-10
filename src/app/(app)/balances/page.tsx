@@ -1,10 +1,11 @@
 import { db } from "@/db";
 import { recordSettlementAction, undoSettlementAction } from "@/app/actions";
 import { CATEGORY_ICONS } from "@/lib/constants";
-import { computeBalances, formatMoney, spendingSummary, suggestSettlements } from "@/lib/money";
+import { computeBalances, moneyFormatter, spendingSummary, suggestSettlements } from "@/lib/money";
 import { listExpensesWithShares, listSettlements, listUsers } from "@/lib/repo";
 import { requireUserAndTrip } from "@/lib/session";
 import { Avatar, Card, PageHeader } from "@/components/ui";
+import { SettleButton } from "./SettleButton";
 
 export default async function BalancesPage() {
   const { user, trip } = await requireUserAndTrip();
@@ -16,7 +17,7 @@ export default async function BalancesPage() {
   const userIds = users.map((u) => u.id);
   const userById = new Map(users.map((u) => [u.id, u]));
   const name = (id: number) => (id === user.id ? "You" : (userById.get(id)?.username ?? "Someone"));
-  const money = (c: number) => formatMoney(c, trip.currency);
+  const money = moneyFormatter(trip.currency);
 
   const balances = computeBalances(userIds, expenses, settlements);
   const transfers = suggestSettlements(balances);
@@ -47,12 +48,7 @@ export default async function BalancesPage() {
                       <p className="text-lg font-bold text-slate-900">{money(t.amountCents)}</p>
                     </div>
                     <form action={recordSettlementAction.bind(null, t.fromUserId, t.toUserId, t.amountCents)}>
-                      <button
-                        type="submit"
-                        className="rounded-lg border border-teal-600 px-3 py-2 text-xs font-semibold text-teal-700 hover:bg-teal-50"
-                      >
-                        Mark settled
-                      </button>
+                      <SettleButton />
                     </form>
                   </Card>
                 </li>
