@@ -1,0 +1,29 @@
+"use client";
+
+import { useActionState } from "react";
+import { loginAction } from "@/app/actions";
+import { Field, FormMessage, inputClass, primaryButton } from "@/components/ui";
+
+export function LoginForm({ users }: { users: { id: number; username: string }[] }) {
+  const [state, action, pending] = useActionState(loginAction, undefined);
+  return (
+    <form action={action} className="space-y-4">
+      <Field label="Your name">
+        <select name="userId" required defaultValue="" className={inputClass}>
+          <option value="" disabled>
+            Select your name…
+          </option>
+          {users.map((u) => (
+            <option key={u.id} value={u.id}>
+              {u.username}
+            </option>
+          ))}
+        </select>
+      </Field>
+      <FormMessage state={state} />
+      <button type="submit" disabled={pending} className={`${primaryButton} w-full`}>
+        {pending ? "Logging in…" : "Log in"}
+      </button>
+    </form>
+  );
+}
